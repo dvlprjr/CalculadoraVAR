@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaR Pro — Calculadora de Valor en Riesgo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --navy:    #0a1628;
+    --navy2:   #112240;
+    --navy3:   #1a3560;
+    --accent:  #4f9cf9;
+    --accent2: #7bb8fb;
+    --gold:    #f0a500;
+    --red:     #e85454;
+    --green:   #3ecf8e;
+    --amber:   #f59e0b;
+    --text:    #e8edf5;
+    --text2:   #8da0bc;
+    --text3:   #4a6080;
+    --border:  rgba(255,255,255,0.08);
+    --card:    rgba(255,255,255,0.04);
+    --card2:   rgba(255,255,255,0.07);
+    --radius:  12px;
+    --radius2: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--navy);
+    color: var(--text);
+    font-family: 'Figtree', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── BACKGROUND GRID ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(79,156,249,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,156,249,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── LAYOUT ── */
+  .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* ── HEADER ── */
+  header {
+    padding: 48px 0 40px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .logo-area h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.6rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1;
+  }
+  .logo-area h1 span { color: var(--accent); }
+  .logo-area p {
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 6px;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+  }
+  .header-badge {
+    background: rgba(79,156,249,0.1);
+    border: 1px solid rgba(79,156,249,0.25);
+    color: var(--accent2);
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    padding: 6px 14px;
+    border-radius: 99px;
+  }
+
+  /* ── STEPS ── */
+  .steps-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  .step-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex; gap: 14px; align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+  .step-card.active { border-color: rgba(79,156,249,0.4); background: rgba(79,156,249,0.06); }
+  .step-card.done { border-color: rgba(62,207,142,0.35); background: rgba(62,207,142,0.05); }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; font-family: 'DM Mono', monospace;
+    background: var(--navy3); color: var(--text2); border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .step-card.active .step-num { background: var(--accent); color: var(--navy); border-color: var(--accent); }
+  .step-card.done .step-num { background: var(--green); color: var(--navy); border-color: var(--green); }
+  .step-info h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .step-info p { font-size: 12px; color: var(--text2); line-height: 1.4; }
+
+  /* ── SECTION TITLES ── */
+  .section-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text3);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 1.5px dashed rgba(79,156,249,0.3);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(79,156,249,0.02);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(79,156,249,0.06);
+  }
+  .upload-zone .upload-icon {
+    width: 52px; height: 52px; margin: 0 auto 16px;
+    background: rgba(79,156,249,0.12);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .upload-zone h3 { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+  .upload-zone p { font-size: 13px; color: var(--text2); }
+  .file-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(62,207,142,0.1); border: 1px solid rgba(62,207,142,0.3);
+    color: var(--green); font-size: 13px; padding: 6px 14px; border-radius: 99px;
+    margin-top: 12px;
+  }
+
+  /* ── PARAM GRID ── */
+  .param-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .param-group label {
+    display: block; font-size: 12px; color: var(--text2);
+    margin-bottom: 6px; font-weight: 500; letter-spacing: 0.02em;
+  }
+  .param-group input, .param-group select {
+    width: 100%; padding: 10px 14px;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: var(--radius2); color: var(--text);
+    font-family: 'Figtree', sans-serif; font-size: 14px;
+    transition: border-color 0.15s;
+    -webkit-appearance: none; appearance: none;
+  }
+  .param-group input:focus, .param-group select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,156,249,0.12);
+  }
+  .param-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238da0bc' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 36px;
+  }
+  .param-group select option { background: var(--navy2); color: var(--text); }
+
+  /* ── CONFIDENCE CHIPS ── */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .chip {
+    padding: 7px 18px; border-radius: 99px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--border); cursor: pointer;
+    background: transparent; color: var(--text2);
+    transition: all 0.15s; font-family: 'DM Mono', monospace;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active {
+    background: var(--accent); color: var(--navy);
+    border-color: var(--accent); font-weight: 600;
+  }
+
+  /* ── CALC BUTTON ── */
+  .calc-btn {
+    width: 100%; padding: 14px;
+    background: var(--accent);
+    border: none; border-radius: var(--radius);
+    color: var(--navy); font-family: 'Figtree', sans-serif;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; letter-spacing: 0.01em;
+  }
+  .calc-btn:hover:not(:disabled) { background: var(--accent2); transform: translateY(-1px); }
+  .calc-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+  /* ── METRIC CARDS ── */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
+  .metric-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px;
+    transition: border-color 0.2s;
+  }
+  .metric-card:hover { border-color: rgba(79,156,249,0.25); }
+  .metric-card .m-label { font-size: 11px; color: var(--text2); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; }
+  .metric-card .m-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 22px; font-weight: 500; line-height: 1;
+    margin-bottom: 4px;
+  }
+  .metric-card .m-sub { font-size: 11px; color: var(--text3); }
+  .m-value.red { color: var(--red); }
+  .m-value.amber { color: var(--amber); }
+  .m-value.green { color: var(--green); }
+  .m-value.accent { color: var(--accent); }
+
+  /* ── TABS ── */
+  .tabs-wrap {
+    border-bottom: 1px solid var(--border); margin-bottom: 24px;
+    display: flex; gap: 0; overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 10px 20px; font-size: 13px; font-weight: 500;
+    color: var(--text2); background: none; border: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    font-family: 'Figtree', sans-serif;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── CHART CARDS ── */
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+  }
+  .chart-wrap { position: relative; width: 100%; height: 280px; }
+  .chart-wrap-tall { position: relative; width: 100%; height: 320px; }
+  .chart-wrap-sm { position: relative; width: 100%; height: 220px; }
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+  }
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .legend-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  .legend-line { width: 16px; height: 2px; border-radius: 1px; }
+
+  /* ── TWO COL ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* ── STAT TABLE ── */
+  .stat-table { width: 100%; }
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-key { color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .stat-val { font-family: 'DM Mono', monospace; font-weight: 500; color: var(--text); }
+  .stat-val.red { color: var(--red); }
+  .stat-val.green { color: var(--green); }
+
+  /* ── MULTI PERIOD CARDS ── */
+  .mp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+  .mp-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 14px 10px; text-align: center;
+  }
+  .mp-card .mp-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .mp-card .mp-val { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: var(--red); }
+  .mp-card .mp-pct { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── COMPARE TABLE ── */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .compare-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 16px;
+  }
+  .compare-card .c-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .compare-card .c-val { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; }
+
+  /* ── INSIGHT BOX ── */
+  .insight-box {
+    background: rgba(79,156,249,0.06);
+    border: 1px solid rgba(79,156,249,0.2);
+    border-radius: var(--radius2); padding: 14px 16px;
+    font-size: 13px; color: var(--text2); line-height: 1.6;
+    margin-top: 14px;
+  }
+  .insight-box strong { color: var(--accent); font-weight: 600; }
+
+  /* ── BACKTESTING VERDICT ── */
+  .verdict-box {
+    border-radius: var(--radius2); padding: 14px 16px;
+    font-size: 13px; line-height: 1.6; margin-bottom: 16px;
+  }
+  .verdict-box.pass { background: rgba(62,207,142,0.07); border: 1px solid rgba(62,207,142,0.25); color: var(--green); }
+  .verdict-box.warn { background: rgba(240,165,0,0.07); border: 1px solid rgba(240,165,0,0.25); color: var(--amber); }
+  .verdict-box.fail { background: rgba(232,84,84,0.07); border: 1px solid rgba(232,84,84,0.25); color: var(--red); }
+  .verdict-box strong { font-weight: 600; }
+
+  /* ── TOOLTIP ── */
+  .tooltip-wrap { position: relative; display: inline-flex; align-items: center; }
+  .tooltip-wrap .tt {
+    display: none; position: absolute; bottom: 130%; left: 50%;
+    transform: translateX(-50%);
+    background: var(--navy2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+    font-size: 12px; color: var(--text2); width: 220px;
+    z-index: 100; line-height: 1.5; font-family: 'Figtree', sans-serif; font-weight: 400;
+    pointer-events: none;
+  }
+  .tooltip-wrap:hover .tt { display: block; }
+  .info-btn {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid var(--text3); color: var(--text3);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; cursor: help; margin-left: 4px;
+  }
+
+  /* ── BADGE ── */
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .badge.pass { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.3); }
+  .badge.warn { background: rgba(240,165,0,0.12); color: var(--amber); border: 1px solid rgba(240,165,0,0.3); }
+  .badge.fail { background: rgba(232,84,84,0.12); color: var(--red); border: 1px solid rgba(232,84,84,0.3); }
+
+  /* ── DOWNLOAD BTN ── */
+  .dl-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: var(--radius2);
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text2); font-size: 12px; font-weight: 500;
+    cursor: pointer; font-family: 'Figtree', sans-serif;
+    transition: all 0.15s;
+  }
+  .dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── ERROR ── */
+  .error-msg {
+    background: rgba(232,84,84,0.08); border: 1px solid rgba(232,84,84,0.25);
+    border-radius: var(--radius2); padding: 10px 14px;
+    font-size: 13px; color: var(--red); margin-top: 10px; display: none;
+  }
+
+  /* ── FOOTER NOTE ── */
+  .note-box {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 10px 14px;
+    font-size: 12px; color: var(--text3); line-height: 1.5; margin-top: 8px;
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.06); overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  .fade-up { animation: fadeUp 0.35s ease both; }
+  .fade-up-2 { animation: fadeUp 0.35s 0.07s ease both; }
+  .fade-up-3 { animation: fadeUp 0.35s 0.14s ease both; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .steps-row { grid-template-columns: 1fr; }
+    .param-grid { grid-template-columns: 1fr 1fr; }
+    .metrics-grid { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    .mp-grid { grid-template-columns: repeat(3, 1fr); }
+    .compare-grid { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .logo-area h1 { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-area">
+      <h1>VaR<span>Pro</span></h1>
+      <p>Calculadora profesional de Valor en Riesgo · Simulación histórica completa</p>
+    </div>
+    <div class="header-badge">v2.0 · Sin instalación requerida</div>
+  </header>
+
+  <!-- STEPS INDICATOR -->
+  <div class="steps-row">
+    <div class="step-card active" id="step1Card">
+      <div class="step-num" id="step1Num">1</div>
+      <div class="step-info">
+        <h3>Cargar datos</h3>
+        <p>Sube tu archivo CSV o Excel con precios o retornos históricos</p>
+      </div>
+    </div>
+    <div class="step-card" id="step2Card">
+      <div class="step-num" id="step2Num">2</div>
+      <div class="step-info">
+        <h3>Configurar parámetros</h3>
+        <p>Define nivel de confianza, tipo de dato y valor de posición</p>
+      </div>
+    </div>
+    <div class="step-card" id="step3Card">
+      <div class="step-num" id="step3Num">3</div>
+      <div class="step-info">
+        <h3>Ver resultados</h3>
+        <p>Analiza VaR, backtesting, campana de Gauss y más</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1: UPLOAD -->
+  <div class="section-title">Paso 1 — Cargar datos</div>
+  <div id="uploadSection">
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12M8 7l4-4 4 4M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2" stroke="#4f9cf9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3>Arrastra tu archivo aquí o haz clic para buscar</h3>
+      <p>Formatos soportados: CSV, Excel (.xlsx, .xls)</p>
+      <div id="filePill" style="display:none" class="file-pill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="fileName">—</span>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none">
+    <div id="errMsg" class="error-msg"></div>
+    <div class="note-box" style="margin-top:12px;">
+      <strong style="color:var(--text2);">¿No tienes un archivo aún?</strong>
+      La columna debe contener precios históricos o retornos diarios.
+      Se necesitan mínimo 20 observaciones; se recomiendan ≥250 para resultados robustos.
+    </div>
+  </div>
+
+  <!-- STEP 2: PARAMS -->
+  <div style="margin-top:32px">
+    <div class="section-title">Paso 2 — Configurar parámetros</div>
+    <div class="param-grid">
+      <div class="param-group">
+        <label>¿Qué contiene la columna?</label>
+        <select id="dataType">
+          <option value="prices">Precios históricos</option>
+          <option value="returns">Retornos (decimal o %)</option>
+        </select>
+      </div>
+      <div class="param-group">
+        <label>Número de columna (1 = primera)</label>
+        <input type="number" id="colIndex" value="2" min="1" step="1">
+      </div>
+      <div class="param-group">
+        <label>Valor de la posición ($)</label>
+        <input type="number" id="posValue" value="100000" min="1" step="1000">
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:4px;">Nivel de confianza</div>
+    <div class="chips">
+      <span class="chip" data-conf="0.90">90%</span>
+      <span class="chip active" data-conf="0.95">95%</span>
+      <span class="chip" data-conf="0.99">99%</span>
+      <span class="chip" data-conf="0.995">99.5%</span>
+    </div>
+    <button class="calc-btn" id="calcBtn" disabled>
+      Calcular VaR →
+    </button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" style="display:none; margin-top:48px;">
+
+    <div class="section-title fade-up">Resultados del análisis</div>
+
+    <div class="metrics-grid fade-up-2" id="metricsGrid"></div>
+
+    <div class="tabs-wrap fade-up-3">
+      <button class="tab-btn active" data-tab="hist">Histograma</button>
+      <button class="tab-btn" data-tab="gauss">Campana de Gauss</button>
+      <button class="tab-btn" data-tab="compare">Histórico vs Paramétrico</button>
+      <button class="tab-btn" data-tab="multi">Multi-período</button>
+      <button class="tab-btn" data-tab="backtest">Backtesting</button>
+      <button class="tab-btn" data-tab="stats">Estadísticas</button>
+    </div>
+
+    <!-- TAB: HISTOGRAMA -->
+    <div id="tab-hist" class="tab-panel active">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Distribución de retornos históricos</span>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red);"></div>Zona de pérdida (cola VaR)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent);"></div>Distribución observada</div>
+          <div class="legend-item"><div class="legend-line" style="background:#fff; opacity:0.4;"></div>Curva normal teórica</div>
+        </div>
+        <div class="chart-wrap"><canvas id="histChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TAB: GAUSS -->
+    <div id="tab-gauss" class="tab-panel">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Campana de Gauss — Distribución normal ajustada</span>
+          <button class="dl-btn" id="dlGauss">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M8 11l4 4 4-4M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Descargar PNG
+          </button>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-line" style="background:var(--accent);height:2px;"></div>Distribución normal</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(232,84,84,0.55);"></div>Cola VaR</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(245,158,11,0.5);"></div>Cola CVaR (peor escenario)</div>
+        </div>
+        <div class="chart-wrap-tall"><canvas id="gaussChart"></canvas></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;">
+          <div class="note-box">Media μ: <strong id="gMean" style="color:var(--text);font-family:'DM Mono',monospace;">—</strong></div>
+          <div class="note-box">Desv. est. σ: <strong id="gStd" style="color:var(--text);font-family:'DM Mono',monospace;">—</strong></div>
+          <div class="note-box">VaR paramétrico: <strong id="gVarP" style="color:var(--red);font-family:'DM Mono',monospace;">—</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: COMPARE -->
+    <div id="tab-compare" class="tab-panel">
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">Histórico vs Paramétrico por horizonte</span></div>
+        <div class="compare-grid" id="compareGrid"></div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-line" style="background:var(--accent);height:2px;"></div>VaR histórico</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--green);height:2px;border-style:dashed;"></div>VaR paramétrico</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--amber);height:2px;"></div>CVaR histórico</div>
+        </div>
+        <div class="chart-wrap-sm"><canvas id="compareChart"></canvas></div>
+        <div class="insight-box" id="compareInsight"></div>
+      </div>
+    </div>
+
+    <!-- TAB: MULTI PERIODO -->
+    <div id="tab-multi" class="tab-panel">
+      <div class="chart-card">
+        <div class="chart-header"><span class="chart-title">VaR escalado por horizonte temporal — Regla √T</span></div>
+        <div class="mp-grid" id="mpGrid"></div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent);"></div>VaR ($)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red);"></div>CVaR ($)</div>
+        </div>
+        <div class="chart-wrap-sm"><canvas id="mpChart"></canvas></div>
+        <div class="note-box" style="margin-top:14px;">VaR(T días) = VaR(1 día) × √T · Válido bajo supuesto de retornos i.i.d. con distribución estacionaria.</div>
+      </div>
+    </div>
+
+    <!-- TAB: BACKTESTING -->
+    <div id="tab-backtest" class="tab-panel">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">
+            Backtesting — Prueba de Kupiec (POF)
+            <span class="tooltip-wrap">
+              <span class="info-btn">?</span>
+              <span class="tt">Verifica si el número real de excepciones es estadísticamente consistente con el nivel de confianza usando el test de razón de verosimilitud de Kupiec (1995).</span>
+            </span>
+          </span>
+          <div id="kupiecBadge"></div>
+        </div>
+        <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);" id="backMetrics"></div>
+        <div class="verdict-box" id="verdictBox" style="margin-top:14px;"></div>
+        <div class="legend-row" style="margin-top:8px;">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--accent);opacity:0.5;"></div>Retorno normal</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red);"></div>Excepción (supera VaR)</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--amber);height:1.5px;"></div>Límite VaR</div>
+        </div>
+        <div class="chart-wrap-sm"><canvas id="backChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TAB: ESTADÍSTICAS -->
+    <div id="tab-stats" class="tab-panel">
+      <div class="two-col">
+        <div class="chart-card">
+          <div class="chart-header"><span class="chart-title">Serie histórica de retornos</span></div>
+          <div class="chart-wrap"><canvas id="retChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><span class="chart-title">Estadísticas descriptivas</span></div>
+          <div class="stat-table" id="statTable"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+
+  <div style="height:1px; background:var(--border); margin: 48px 0 16px;"></div>
+  <div style="font-size:12px; color:var(--text3); text-align:center; padding-bottom:8px;">
+    VaR Pro · Calculadora de riesgo de mercado · Todos los cálculos se realizan localmente en tu navegador
+  </div>
+
+</div><!-- /page -->
+
+<script>
+// ──────────────────────────────────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────────────────────────────────
+let returns = [], confidence = 0.95, state = {};
+const charts = {};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// UI EVENTS
+// ──────────────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(c => {
+  c.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    confidence = parseFloat(c.dataset.conf);
+  });
+});
+
+document.querySelectorAll('.tab-btn').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => handleFile(e.target.files[0]));
+document.getElementById('calcBtn').addEventListener('click', compute);
+
+document.getElementById('dlGauss').addEventListener('click', () => {
+  const canvas = document.getElementById('gaussChart');
+  const off = document.createElement('canvas');
+  off.width = canvas.width; off.height = canvas.height;
+  const ctx = off.getContext('2d');
+  ctx.fillStyle = '#0a1628';
+  ctx.fillRect(0, 0, off.width, off.height);
+  ctx.drawImage(canvas, 0, 0);
+  const a = document.createElement('a');
+  a.download = 'campana_gauss_var.png';
+  a.href = off.toDataURL('image/png');
+  a.click();
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FILE HANDLING
+// ──────────────────────────────────────────────────────────────────────────────
+function showErr(m) {
+  const e = document.getElementById('errMsg');
+  e.textContent = m; e.style.display = 'block';
+}
+function clearErr() { document.getElementById('errMsg').style.display = 'none'; }
+
+function handleFile(file) {
+  clearErr();
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let raw;
+      if (file.name.match(/\.csv$/i)) { raw = e.target.result; }
+      else {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        raw = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+      }
+      parseCSV(raw, file.name);
+    } catch (err) { showErr('Error al leer el archivo: ' + err.message); }
+  };
+  if (file.name.match(/\.csv$/i)) reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+function parseCSV(raw, fname) {
+  const lines = raw.trim().split('\n').filter(l => l.trim());
+  const colIdx = parseInt(document.getElementById('colIndex').value) - 1;
+  const sep = raw.includes(';') ? ';' : ',';
+  const data = []; let skipped = 0;
+  for (const line of lines) {
+    const cells = line.split(sep);
+    if (colIdx >= cells.length) continue;
+    const v = parseFloat(cells[colIdx].replace(/["%\s]/g, '').replace(',', '.'));
+    if (isNaN(v)) { skipped++; continue; }
+    data.push(v);
+  }
+  if (data.length < 20) {
+    showErr('Se necesitan al menos 20 valores numéricos. Verifica el número de columna (actualmente: ' + (colIdx + 1) + ').');
+    return;
+  }
+  const type = document.getElementById('dataType').value;
+  if (type === 'prices') {
+    returns = [];
+    for (let i = 1; i < data.length; i++) returns.push((data[i] - data[i - 1]) / data[i - 1]);
+  } else {
+    returns = data.map(v => Math.abs(v) > 1 ? v / 100 : v);
+  }
+  document.getElementById('fileName').textContent = fname + ' · ' + returns.length + ' retornos';
+  document.getElementById('filePill').style.display = 'inline-flex';
+  document.getElementById('calcBtn').disabled = false;
+  document.getElementById('results').style.display = 'none';
+  setStep(2);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STATS HELPERS
+// ──────────────────────────────────────────────────────────────────────────────
+function calcStats(arr) {
+  const n = arr.length;
+  const mean = arr.reduce((s, v) => s + v, 0) / n;
+  const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+  const std = Math.sqrt(variance);
+  const skew = arr.reduce((s, v) => s + ((v - mean) / std) ** 3, 0) / n;
+  const kurt = arr.reduce((s, v) => s + ((v - mean) / std) ** 4, 0) / n - 3;
+  return { n, mean, std, skew, kurt };
+}
+
+function invNorm(p) {
+  const a = [2.515517, 0.802853, 0.010328], b = [1.432788, 0.189269, 0.001308];
+  const t = Math.sqrt(-2 * Math.log(p < 0.5 ? p : 1 - p));
+  const x = t - (a[0] + a[1] * t + a[2] * t * t) / (1 + b[0] * t + b[1] * t * t + b[2] * t * t * t);
+  return p < 0.5 ? -x : x;
+}
+
+function normalPDF(x, mu, sigma) {
+  return (1 / (sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * ((x - mu) / sigma) ** 2);
+}
+
+function fmt$(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+function fmtPct(n, d = 2) { return (n * 100).toFixed(d) + '%'; }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STEP INDICATOR
+// ──────────────────────────────────────────────────────────────────────────────
+function setStep(n) {
+  [1, 2, 3].forEach(i => {
+    const card = document.getElementById('step' + i + 'Card');
+    card.classList.remove('active', 'done');
+    if (i < n) card.classList.add('done');
+    else if (i === n) card.classList.add('active');
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MAIN COMPUTE
+// ──────────────────────────────────────────────────────────────────────────────
+function compute() {
+  if (!returns.length) return;
+  const posVal = parseFloat(document.getElementById('posValue').value) || 100000;
+  const sorted = [...returns].sort((a, b) => a - b);
+  const n = sorted.length;
+  const idx = Math.floor((1 - confidence) * n);
+  const varRetH = sorted[idx];
+  const cvarRetH = sorted.slice(0, idx + 1).reduce((s, v) => s + v, 0) / (idx + 1);
+  const st = calcStats(returns);
+  const z = invNorm(1 - confidence);
+  const varRetP = st.mean + z * st.std;
+  const cvarRetP = st.mean - st.std * normalPDF(z, 0, 1) / (1 - confidence);
+
+  state = {
+    sorted, n, idx, varRetH, cvarRetH, varRetP, cvarRetP,
+    varAbsH: -varRetH * posVal, cvarAbsH: -cvarRetH * posVal,
+    varAbsP: -varRetP * posVal, cvarAbsP: -cvarRetP * posVal,
+    st, posVal
+  };
+
+  renderMetrics();
+  renderHistogram();
+  renderGauss();
+  renderCompare();
+  renderMulti();
+  renderBacktest();
+  renderStats();
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setStep(3);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// METRIC CARDS
+// ──────────────────────────────────────────────────────────────────────────────
+function renderMetrics() {
+  const { varAbsH, varAbsP, cvarAbsH, varRetH, n } = state;
+  const pct = fmtPct(-varRetH);
+  document.getElementById('metricsGrid').innerHTML = `
+    <div class="metric-card">
+      <div class="m-label">VaR histórico · 1 día</div>
+      <div class="m-value red">${fmt$(varAbsH)}</div>
+      <div class="m-sub">${pct} del portafolio</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">VaR paramétrico · 1 día</div>
+      <div class="m-value amber">${fmt$(varAbsP)}</div>
+      <div class="m-sub">bajo distribución normal</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">CVaR / Expected Shortfall</div>
+      <div class="m-value red">${fmt$(cvarAbsH)}</div>
+      <div class="m-sub">pérdida promedio en la cola</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">Observaciones</div>
+      <div class="m-value accent">${n.toLocaleString('en-US')}</div>
+      <div class="m-sub">retornos diarios analizados</div>
+    </div>
+  `;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// HISTOGRAM
+// ──────────────────────────────────────────────────────────────────────────────
+function renderHistogram() {
+  const { sorted, n, varRetH, st } = state;
+  const bins = Math.min(45, Math.ceil(Math.sqrt(n)));
+  const mn = sorted[0], mx = sorted[n - 1], bw = (mx - mn) / bins;
+  const counts = Array(bins).fill(0), labels = [];
+  for (let i = 0; i < bins; i++) labels.push(((mn + i * bw) * 100).toFixed(1) + '%');
+  sorted.forEach(v => { let b = Math.min(Math.floor((v - mn) / bw), bins - 1); counts[b]++; });
+  const colors = counts.map((_, i) => (mn + (i + 0.5) * bw) <= varRetH ? 'rgba(232,84,84,0.7)' : 'rgba(79,156,249,0.6)');
+  const normalLine = Array(bins).fill(0).map((_, i) =>
+    parseFloat((normalPDF(mn + (i + 0.5) * bw, st.mean, st.std) * bw * n).toFixed(2))
+  );
+  if (charts.hist) charts.hist.destroy();
+  charts.hist = new Chart(document.getElementById('histChart'), {
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', data: counts, backgroundColor: colors, borderWidth: 0, barPercentage: 1, categoryPercentage: 1, order: 2 },
+        { type: 'line', data: normalLine, borderColor: 'rgba(255,255,255,0.35)', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.4, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, font: { size: 11 }, color: '#8da0bc' }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAUSS
+// ──────────────────────────────────────────────────────────────────────────────
+function renderGauss() {
+  const { st, varRetH, cvarRetH, varRetP } = state;
+  const pts = 400, xMin = st.mean - 4.5 * st.std, xMax = st.mean + 4.5 * st.std, step = (xMax - xMin) / pts;
+  const norm = [], tailVar = [], tailCvar = [];
+  for (let i = 0; i <= pts; i++) {
+    const x = xMin + i * step, y = normalPDF(x, st.mean, st.std);
+    norm.push({ x: parseFloat((x * 100).toFixed(4)), y: parseFloat(y.toFixed(7)) });
+    tailVar.push({ x: parseFloat((x * 100).toFixed(4)), y: x <= varRetH ? parseFloat(y.toFixed(7)) : null });
+    tailCvar.push({ x: parseFloat((x * 100).toFixed(4)), y: x <= cvarRetH ? parseFloat(y.toFixed(7)) : null });
+  }
+  document.getElementById('gMean').textContent = fmtPct(st.mean, 3);
+  document.getElementById('gStd').textContent = fmtPct(st.std, 3);
+  document.getElementById('gVarP').textContent = fmtPct(-varRetP, 2);
+  if (charts.gauss) charts.gauss.destroy();
+  charts.gauss = new Chart(document.getElementById('gaussChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Normal', data: norm, borderColor: '#4f9cf9', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4, parsing: false },
+        { label: 'Cola CVaR', data: tailCvar, borderColor: 'transparent', borderWidth: 0, pointRadius: 0, fill: { target: 'origin', above: 'transparent', below: 'rgba(245,158,11,0.45)' }, tension: 0.4, parsing: false },
+        { label: 'Cola VaR', data: tailVar, borderColor: 'transparent', borderWidth: 0, pointRadius: 0, fill: { target: 'origin', above: 'transparent', below: 'rgba(232,84,84,0.5)' }, tension: 0.4, parsing: false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { type: 'linear', ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => v.toFixed(1) + '%', maxTicksLimit: 9 }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Retorno diario (%)', font: { size: 11 }, color: '#8da0bc' } },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => v.toFixed(3) }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Densidad de probabilidad', font: { size: 11 }, color: '#8da0bc' } }
+      }
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// COMPARE
+// ──────────────────────────────────────────────────────────────────────────────
+function renderCompare() {
+  const { varAbsH, varAbsP, cvarAbsH, cvarAbsP, varRetH, varRetP, st } = state;
+  const diff = (varAbsH - varAbsP) / varAbsP * 100;
+  document.getElementById('compareGrid').innerHTML = `
+    <div class="compare-card"><div class="c-label">VaR histórico</div><div class="c-val" style="color:var(--accent);">${fmt$(varAbsH)}</div><div style="font-size:12px;color:var(--text2);margin-top:4px;">${fmtPct(-varRetH)}</div></div>
+    <div class="compare-card"><div class="c-label">VaR paramétrico</div><div class="c-val" style="color:var(--green);">${fmt$(varAbsP)}</div><div style="font-size:12px;color:var(--text2);margin-top:4px;">${fmtPct(-varRetP)}</div></div>
+    <div class="compare-card"><div class="c-label">Diferencia</div><div class="c-val" style="color:${Math.abs(diff) > 10 ? 'var(--red)' : 'var(--green)'};">${diff > 0 ? '+' : ''}${diff.toFixed(1)}%</div><div style="font-size:12px;color:var(--text2);margin-top:4px;">${Math.abs(diff) > 10 ? 'Divergencia significativa' : 'Métodos alineados'}</div></div>
+  `;
+  const periods = [1, 5, 10, 21, 63, 252], labels = ['1d', '5d', '10d', '21d', '63d', '252d'];
+  if (charts.compare) charts.compare.destroy();
+  charts.compare = new Chart(document.getElementById('compareChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'VaR Histórico', data: periods.map(t => Math.round(varAbsH * Math.sqrt(t))), borderColor: '#4f9cf9', borderWidth: 2, pointRadius: 4, fill: false, tension: 0.3 },
+        { label: 'VaR Paramétrico', data: periods.map(t => Math.round(varAbsP * Math.sqrt(t))), borderColor: '#3ecf8e', borderWidth: 2, pointRadius: 4, fill: false, tension: 0.3, borderDash: [5, 3] },
+        { label: 'CVaR Histórico', data: periods.map(t => Math.round(cvarAbsH * Math.sqrt(t))), borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 3, fill: false, tension: 0.3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 11 }, color: '#8da0bc' }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => '$' + Math.round(v / 1000) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+  const skText = st.skew < -0.3
+    ? `La asimetría negativa (${st.skew.toFixed(2)}) indica cola izquierda más pesada — el VaR histórico captura mejor los eventos extremos de pérdida.`
+    : st.skew > 0.3
+      ? `La asimetría positiva (${st.skew.toFixed(2)}) sugiere menos pérdidas extremas de lo que predice la distribución normal.`
+      : `La distribución es aproximadamente simétrica (asimetría = ${st.skew.toFixed(2)}).`;
+  const ktText = st.kurt > 1
+    ? ` La curtosis elevada (${st.kurt.toFixed(2)}) confirma <strong>colas gordas</strong> — ocurren más eventos extremos de lo que predice la normal, por lo que el VaR histórico es el más adecuado.`
+    : ` La curtosis es cercana a cero (${st.kurt.toFixed(2)}), lo que indica que la distribución normal es una buena aproximación.`;
+  document.getElementById('compareInsight').innerHTML =
+    `<strong>Interpretación automática:</strong> El VaR histórico es ${diff > 0 ? `<strong style="color:var(--red)">+${diff.toFixed(1)}% mayor</strong>` : `<strong style="color:var(--green)">${Math.abs(diff).toFixed(1)}% menor</strong>`} que el paramétrico al ${(confidence * 100).toFixed(0)}% de confianza. ${skText}${ktText}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MULTI PERIOD
+// ──────────────────────────────────────────────────────────────────────────────
+function renderMulti() {
+  const { varAbsH, cvarAbsH, varRetH } = state;
+  const periods = [1, 5, 10, 21, 63, 252];
+  const pLabels = ['1 día', '5 días', '10 días', '21 días', '63 días', '252 días'];
+  document.getElementById('mpGrid').innerHTML = periods.map((t, i) => {
+    const v = varAbsH * Math.sqrt(t), pct = (-varRetH * 100 * Math.sqrt(t)).toFixed(2);
+    return `<div class="mp-card"><div class="mp-label">${pLabels[i]}</div><div class="mp-val">${fmt$(Math.round(v))}</div><div class="mp-pct">${pct}%</div></div>`;
+  }).join('');
+  if (charts.mp) charts.mp.destroy();
+  charts.mp = new Chart(document.getElementById('mpChart'), {
+    type: 'bar',
+    data: {
+      labels: ['1d', '5d', '10d', '21d', '63d', '252d'],
+      datasets: [
+        { label: 'VaR ($)', data: periods.map(t => Math.round(varAbsH * Math.sqrt(t))), backgroundColor: 'rgba(79,156,249,0.7)' },
+        { label: 'CVaR ($)', data: periods.map(t => Math.round(cvarAbsH * Math.sqrt(t))), backgroundColor: 'rgba(232,84,84,0.7)' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': $' + ctx.raw.toLocaleString('en-US') } } },
+      scales: {
+        x: { ticks: { font: { size: 11 }, color: '#8da0bc' }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => '$' + Math.round(v / 1000) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BACKTESTING
+// ──────────────────────────────────────────────────────────────────────────────
+function renderBacktest() {
+  const { varRetH, n, posVal } = state;
+  const alpha = 1 - confidence;
+  const exceptions = returns.filter(r => r < varRetH).length;
+  const expectedExc = Math.round(alpha * n);
+  const pHat = exceptions / n;
+  const logH0 = exceptions * Math.log(alpha) + (n - exceptions) * Math.log(1 - alpha);
+  const logH1 = pHat > 0 && pHat < 1 ? (exceptions * Math.log(pHat) + (n - exceptions) * Math.log(1 - pHat)) : logH0;
+  const LR = -2 * (logH0 - logH1);
+  const chi2_95 = 3.841, chi2_99 = 6.635;
+
+  let cls, label, verdict;
+  if (LR < chi2_95) {
+    cls = 'pass'; label = 'Modelo válido';
+    verdict = `El estadístico LR = ${LR.toFixed(2)} es menor al valor crítico χ²(95%) = 3.84. <strong>El modelo pasa el test de Kupiec</strong>: el número de excepciones observadas (${exceptions}) es estadísticamente consistente con el nivel de confianza del ${(confidence * 100).toFixed(0)}%.`;
+  } else if (LR < chi2_99) {
+    cls = 'warn'; label = 'Advertencia';
+    verdict = `El estadístico LR = ${LR.toFixed(2)} supera χ²(95%) = 3.84 pero está por debajo de χ²(99%) = 6.63. <strong>El modelo falla al 95% pero pasa al 99%</strong>. Se recomienda revisar el modelo o ampliar el período de datos.`;
+  } else {
+    cls = 'fail'; label = 'Modelo rechazado';
+    verdict = `El estadístico LR = ${LR.toFixed(2)} supera χ²(99%) = 6.63. <strong>El modelo falla el test de Kupiec</strong>: el número real de excepciones (${exceptions}) es significativamente diferente al esperado (${expectedExc}). Revisa los datos o el modelo.`;
+  }
+
+  document.getElementById('kupiecBadge').innerHTML = `<span class="badge ${cls}">${label}</span>`;
+  document.getElementById('backMetrics').innerHTML = `
+    <div class="metric-card"><div class="m-label">Excepciones observadas</div><div class="m-value ${exceptions > expectedExc * 1.5 ? 'red' : exceptions > expectedExc ? 'amber' : 'green'}">${exceptions}</div><div class="m-sub">días con pérdida > VaR</div></div>
+    <div class="metric-card"><div class="m-label">Excepciones esperadas</div><div class="m-value">${expectedExc}</div><div class="m-sub">al ${(confidence * 100).toFixed(0)}% de confianza</div></div>
+    <div class="metric-card"><div class="m-label">Tasa real vs esperada</div><div class="m-value">${(exceptions / n * 100).toFixed(2)}% / ${(alpha * 100).toFixed(2)}%</div><div class="m-sub">real vs teórica</div></div>
+    <div class="metric-card"><div class="m-label">Estadístico LR</div><div class="m-value ${LR > chi2_99 ? 'red' : LR > chi2_95 ? 'amber' : 'green'}">${LR.toFixed(2)}</div><div class="m-sub">χ²(95%) = 3.84</div></div>
+  `;
+  const vb = document.getElementById('verdictBox');
+  vb.className = 'verdict-box ' + cls;
+  vb.innerHTML = verdict;
+
+  const disp = returns.length > 300 ? returns.slice(returns.length - 300) : returns;
+  const varLine = disp.map(() => parseFloat((varRetH * 100).toFixed(4)));
+  if (charts.back) charts.back.destroy();
+  charts.back = new Chart(document.getElementById('backChart'), {
+    data: {
+      labels: disp.map((_, i) => i + 1),
+      datasets: [
+        { type: 'bar', data: disp.map(v => parseFloat((v * 100).toFixed(4))), backgroundColor: disp.map(r => r < varRetH ? 'rgba(232,84,84,0.8)' : 'rgba(79,156,249,0.4)'), borderWidth: 0, barPercentage: 0.9, categoryPercentage: 1, order: 2 },
+        { type: 'line', data: varLine, borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, fill: false, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => v.toFixed(1) + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// STATS TAB
+// ──────────────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const { sorted, n, st } = state;
+  const tooltips = {
+    skew: 'Asimetría: negativo = cola izquierda más pesada (más pérdidas extremas). Positivo = cola derecha.',
+    kurt: 'Curtosis exceso > 0 = "colas gordas", más eventos extremos que la distribución normal.',
+    stdA: 'Volatilidad anualizada = σ diaria × √252 (días de trading en un año).'
+  };
+
+  document.getElementById('statTable').innerHTML = [
+    ['Retorno medio diario', fmtPct(st.mean, 3), '', ''],
+    ['Volatilidad diaria (σ)', fmtPct(st.std, 3), '', ''],
+    ['Volatilidad anualizada', fmtPct(st.std * Math.sqrt(252), 2), tooltips.stdA, ''],
+    ['Peor retorno', fmtPct(sorted[0], 2), '', 'red'],
+    ['Mejor retorno', fmtPct(sorted[n - 1], 2), '', 'green'],
+    ['Asimetría (skewness)', st.skew.toFixed(3) + (st.skew < -0.3 ? ' ← cola izquierda' : st.skew > 0.3 ? ' → cola derecha' : ' ≈ simétrico'), tooltips.skew, ''],
+    ['Curtosis exceso', st.kurt.toFixed(3) + (st.kurt > 1 ? ' ← colas gordas' : st.kurt < -0.5 ? ' → colas delgadas' : ' ≈ normal'), tooltips.kurt, ''],
+    ['Número de observaciones', n.toLocaleString('en-US'), '', ''],
+  ].map(([key, val, tip, cls]) => `
+    <div class="stat-row">
+      <span class="stat-key">${key}${tip ? `<span class="tooltip-wrap"><span class="info-btn">?</span><span class="tt">${tip}</span></span>` : ''}</span>
+      <span class="stat-val ${cls}">${val}</span>
+    </div>
+  `).join('');
+
+  const disp = returns.length > 500 ? returns.slice(returns.length - 500) : returns;
+  if (charts.ret) charts.ret.destroy();
+  charts.ret = new Chart(document.getElementById('retChart'), {
+    type: 'bar',
+    data: {
+      labels: disp.map((_, i) => i + 1),
+      datasets: [{ data: disp.map(v => parseFloat((v * 100).toFixed(4))), backgroundColor: disp.map(v => v < 0 ? 'rgba(232,84,84,0.7)' : 'rgba(62,207,142,0.6)'), borderWidth: 0, barPercentage: 0.9, categoryPercentage: 1 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { ticks: { font: { size: 11 }, color: '#8da0bc', callback: v => v.toFixed(1) + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
